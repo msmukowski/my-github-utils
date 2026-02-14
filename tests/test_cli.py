@@ -116,6 +116,28 @@ def test_add_to_project_explicit_project_id(runner, env_vars):
     )
 
 
+def test_add_to_project_by_title(runner, env_vars):
+    mock_result = {
+        "data": {"addProjectV2ItemById": {"item": {"id": "PVTI_2"}}}
+    }
+
+    with patch("gh_utils.cli.github_client.find_project_id_by_title", return_value="PVT_resolved") as mock_find, \
+         patch("gh_utils.cli.github_client.add_to_project", return_value=mock_result) as mock_add:
+        result = runner.invoke(cli, ["add-to-project", "-i", "I_node", "-T", "My Board"])
+
+    assert result.exit_code == 0
+    mock_find.assert_called_once_with("ghp_test", "owner", "My Board")
+    mock_add.assert_called_once_with(
+        token="ghp_test", project_id="PVT_resolved", issue_node_id="I_node"
+    )
+
+
+def test_add_to_project_rejects_both_id_and_title(runner, env_vars):
+    result = runner.invoke(cli, ["add-to-project", "-i", "I_node", "-p", "PVT_x", "-T", "Board"])
+    assert result.exit_code != 0
+    assert "not both" in result.output
+
+
 ########## Test Create and Add
 
 def test_create_and_add(runner, body_file, env_vars):
@@ -139,4 +161,28 @@ def test_create_and_add(runner, body_file, env_vars):
     assert "PVTI_5" in result.output
     mock_add.assert_called_once_with(
         token="ghp_test", project_id="PVT_123", issue_node_id="I_node5"
+    )
+
+
+def test_create_and_add_by_title(runner, body_file, env_vars):
+    mock_issue = {
+        "number": 6,
+        "html_url": "https://github.com/owner/repo/issues/6",
+        "node_id": "I_node6",
+    }
+    mock_project = {
+        "data": {"addProjectV2ItemById": {"item": {"id": "PVTI_6"}}}
+    }
+
+    with patch("gh_utils.cli.github_client.create_issue", return_value=mock_issue), \
+         patch("gh_utils.cli.github_client.find_project_id_by_title", return_value="PVT_resolved"), \
+         patch("gh_utils.cli.github_client.add_to_project", return_value=mock_project) as mock_add:
+        result = runner.invoke(cli, [
+            "create-and-add", "-t", "Title", "-f", str(body_file), "-T", "My Board",
+        ])
+
+    assert result.exit_code == 0
+    assert "#6" in result.output
+    mock_add.assert_called_once_with(
+        token="ghp_test", project_id="PVT_resolved", issue_node_id="I_node6"
     )

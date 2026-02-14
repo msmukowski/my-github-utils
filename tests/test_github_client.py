@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from gh_utils.exceptions import GitHubAPIError
-from gh_utils.github_client import create_issue, add_to_project
+from gh_utils.github_client import create_issue, add_to_project, find_project_id_by_title
 
 
 @pytest.fixture
@@ -72,6 +72,47 @@ def test_create_issue_raises_on_api_error(error_response):
             create_issue(token="t", owner="o", repo="r", title="T", body="B")
 
     assert exc_info.value.status_code == 422
+
+
+########## Test Find Project ID by Title
+
+
+def test_find_project_id_by_title(ok_response):
+    response = ok_response({
+        "data": {
+            "organization": {
+                "projectsV2": {
+                    "nodes": [
+                        {"id": "PVT_aaa", "title": "Other Board"},
+                        {"id": "PVT_bbb", "title": "My Board"},
+                    ],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }
+            }
+        }
+    })
+
+    with patch("gh_utils.github_client.requests.post", return_value=response):
+        result = find_project_id_by_title(token="ghp_test", owner="myorg", title="My Board")
+
+    assert result == "PVT_bbb"
+
+
+def test_find_project_id_by_title_not_found(ok_response):
+    response = ok_response({
+        "data": {
+            "organization": {
+                "projectsV2": {
+                    "nodes": [{"id": "PVT_aaa", "title": "Other Board"}],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }
+            }
+        }
+    })
+
+    with patch("gh_utils.github_client.requests.post", return_value=response):
+        with pytest.raises(GitHubAPIError, match="not found"):
+            find_project_id_by_title(token="ghp_test", owner="myorg", title="Nope")
 
 
 ########## Test Add to project
